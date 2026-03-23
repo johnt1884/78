@@ -2198,41 +2198,35 @@
                     }
                     targetPathConstruction = `Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedVideoName}'`;
 
-                    scriptLines.push(`    $targetPath = [System.IO.Path]::GetFullPath(${targetPathConstruction})`);
-                    scriptLines.push(`    $alreadyCount = (@($playlistContent | Where-Object { $_ -eq $targetPath })).Count`);
-                    scriptLines.push(`    if ($alreadyCount -lt ${multiplier}) {`);
-                    scriptLines.push(`        for ($i = $alreadyCount; $i -lt ${multiplier}; $i++) {`);
-                    scriptLines.push(`            $playlistContent.Add($targetPath)`);
-                    scriptLines.push(`            Write-Host "Added to playlist (video): ${escapedVideoName}"`);
-                    scriptLines.push(`        }`);
-                    scriptLines.push(`    } else { Write-Host "Skipping target (already ${multiplier} times): ${escapedVideoName}" -ForegroundColor DarkGray }`);
+                    scriptLines.push(`$targetPath = [System.IO.Path]::GetFullPath(${targetPathConstruction})`);
+                    scriptLines.push(`for ($i = 0; $i -lt ${multiplier}; $i++) { $playlistContent.Add($targetPath) }`);
+                    scriptLines.push(`Write-Host "Added to playlist (video): ${escapedVideoName} (${multiplier}x)"`);
                 });
                 scriptLines.push('');
             }
 
             if (rootScSelections.length > 0) {
                 scriptLines.push("# --- Processing Root SC Selections ---");
+                scriptLines.push(`$rootSelections = @{}`);
+                rootScSelections.forEach(sel => {
+                    const escapedProjectPath = escapePSString(sel.projectPath);
+                    const multiplier = sel.multiplier || 1;
+                    scriptLines.push(`$rootSelections['' + [System.IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '${escapedProjectPath}'))] = ${multiplier}`);
+                });
+
                 scriptLines.push(`if (Test-Path -LiteralPath $rootScFolder) {`);
                 scriptLines.push(`    $shortcuts = Get-ChildItem -LiteralPath $rootScFolder -File | Where-Object { $_.Extension -match '^\\.(lnk|ink)$' }`);
                 scriptLines.push(`    foreach ($shortcutFile in $shortcuts) {`);
                 scriptLines.push(`        $targetPath = Get-ShortcutTarget $shortcutFile.FullName`);
-                scriptLines.push('        if (-not $targetPath) { Write-Host "Skipping unresolvable shortcut: $($shortcutFile.Name)" -ForegroundColor Yellow; continue }');
-                
-                rootScSelections.forEach(sel => {
-                    const escapedProjectPath = escapePSString(sel.projectPath);
-                    const multiplier = sel.multiplier || 1;
-                    scriptLines.push(`        $projectCheckPath = [System.IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '${escapedProjectPath}'))`);
-                    scriptLines.push(`        if ($targetPath.StartsWith($projectCheckPath + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $targetPath -eq $projectCheckPath) {`);
-                    scriptLines.push(`            $alreadyCount = (@($playlistContent | Where-Object { $_ -eq $targetPath })).Count`);
-                    scriptLines.push(`            if ($alreadyCount -lt ${multiplier}) {`);
-                    scriptLines.push(`                for ($i = $alreadyCount; $i -lt ${multiplier}; $i++) {`);
-                    scriptLines.push(`                    $playlistContent.Add($targetPath)`);
-                    scriptLines.push(`                    Write-Host "Added to playlist (root): $($shortcutFile.Name)"`);
-                    scriptLines.push(`                }`);
-                    scriptLines.push(`            } else { Write-Host "Skipping target from root (already ${multiplier} times): $($shortcutFile.Name)" -ForegroundColor DarkGray }`);
-                    scriptLines.push(`        }`);
-                });
-
+                scriptLines.push('        if (-not $targetPath) { continue }');
+                scriptLines.push(`        foreach ($projPath in $rootSelections.Keys) {`);
+                scriptLines.push(`            if ($targetPath.StartsWith($projPath + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $targetPath -eq $projPath) {`);
+                scriptLines.push(`                $multiplier = $rootSelections[$projPath]`);
+                scriptLines.push(`                for ($i = 0; $i -lt $multiplier; $i++) { $playlistContent.Add($targetPath) }`);
+                scriptLines.push(`                Write-Host "Added to playlist (root): $($shortcutFile.Name) ($multiplier x)"`);
+                scriptLines.push(`                break`);
+                scriptLines.push(`            }`);
+                scriptLines.push(`        }`);
                 scriptLines.push(`    }`);
                 scriptLines.push(`}`);
                 scriptLines.push('');
@@ -2240,6 +2234,7 @@
 
             if (subfolderScSelections.length > 0) {
                 scriptLines.push("# --- Processing Subfolder SC Selections ---");
+                scriptLines.push(`$subfolderSelections = @{}`);
                 subfolderScSelections.forEach(sel => {
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const multiplier = sel.multiplier || 1;
@@ -2247,22 +2242,21 @@
                     if (sel.projectPath) {
                         projectPathVar = `Join-Path -Path $PSScriptRoot -ChildPath '${escapedProjectPath}'`;
                     }
-                    scriptLines.push(`    $projectPath = [System.IO.Path]::GetFullPath((${projectPathVar}))`);
-                    scriptLines.push(`    if (Test-Path -LiteralPath $projectPath) {`);
-                    scriptLines.push(`        $projectShortcuts = Get-ChildItem -LiteralPath $projectPath -Recurse -File | Where-Object { $_.Extension -match '^\\.(lnk|ink)$' -and -not $_.FullName.StartsWith($rootScFolder + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) }`);
-                    scriptLines.push(`        foreach ($shortcutFile in $projectShortcuts) {`);
-                    scriptLines.push(`            $targetPath = Get-ShortcutTarget $shortcutFile.FullName`);
-                    scriptLines.push('            if (-not $targetPath) { Write-Host "Skipping unresolvable shortcut: $($shortcutFile.Name)" -ForegroundColor Yellow; continue }');
-                    scriptLines.push(`            $alreadyCount = (@($playlistContent | Where-Object { $_ -eq $targetPath })).Count`);
-                    scriptLines.push(`            if ($alreadyCount -lt ${multiplier}) {`);
-                    scriptLines.push(`                for ($i = $alreadyCount; $i -lt ${multiplier}; $i++) {`);
-                    scriptLines.push(`                    $playlistContent.Add($targetPath)`);
-                    scriptLines.push(`                    Write-Host "Added to playlist (subfolder): $($shortcutFile.Name)"`);
-                    scriptLines.push(`                }`);
-                    scriptLines.push(`            } else { Write-Host "Skipping target from subfolder (already ${multiplier} times): $($shortcutFile.Name)" -ForegroundColor DarkGray }`);
-                    scriptLines.push(`        }`);
-                    scriptLines.push(`    }`);
+                    scriptLines.push(`$subfolderSelections['' + [System.IO.Path]::GetFullPath((${projectPathVar}))] = ${multiplier}`);
                 });
+
+                scriptLines.push(`foreach ($projPath in $subfolderSelections.Keys) {`);
+                scriptLines.push(`    if (Test-Path -LiteralPath $projPath) {`);
+                scriptLines.push(`        $multiplier = $subfolderSelections[$projPath]`);
+                scriptLines.push(`        $projectShortcuts = Get-ChildItem -LiteralPath $projPath -Recurse -File | Where-Object { $_.Extension -match '^\\.(lnk|ink)$' -and -not $_.FullName.StartsWith($rootScFolder + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) }`);
+                scriptLines.push(`        foreach ($shortcutFile in $projectShortcuts) {`);
+                scriptLines.push(`            $targetPath = Get-ShortcutTarget $shortcutFile.FullName`);
+                scriptLines.push('            if (-not $targetPath) { continue }');
+                scriptLines.push(`            for ($i = 0; $i -lt $multiplier; $i++) { $playlistContent.Add($targetPath) }`);
+                scriptLines.push(`            Write-Host "Added to playlist (subfolder): $($shortcutFile.Name) ($multiplier x)"`);
+                scriptLines.push(`        }`);
+                scriptLines.push(`    }`);
+                scriptLines.push(`}`);
                 scriptLines.push('');
             }
 

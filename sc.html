@@ -1659,7 +1659,7 @@
                         const img = new Image();
                         img.className = 'thumbnail';
                         img.dataset.fileName = file.name;
-                        if (initialShortcutType) {
+                        if (initialShortcutType && currentMode !== 'playlist-root') {
                             img.classList.add('selected-' + initialShortcutType);
                         }
                         thumbnailsContainer.appendChild(img);
@@ -2206,7 +2206,7 @@
                     }
                     targetPathConstruction = `Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedVideoName}'`;
 
-                    scriptLines.push(`$targetPath = [System.IO.Path]::GetFullPath(${targetPathConstruction})`);
+                    scriptLines.push(`$targetPath = [System.IO.Path]::GetFullPath((${targetPathConstruction}))`);
                     scriptLines.push(`for ($i = 0; $i -lt ${multiplier}; $i++) { $playlistContent.Add($targetPath) }`);
                     scriptLines.push(`Write-Host "Added to playlist (video): ${escapedVideoName} (${multiplier}x)"`);
                 });

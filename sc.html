@@ -1614,7 +1614,7 @@
                         else if (hasRootSc) initialShortcutType = 'root-sc';
                     }
 
-                    if (initialShortcutType) {
+                    if (initialShortcutType && currentMode !== 'playlist-root') {
                         const key = project.path + '|' + videoFile.name;
                         const selectionData = { 
                             videoName: videoFile.name, 
@@ -2152,33 +2152,41 @@
         }
 
         function generatePlaylistScript() {
+            const isPlaylistRootMode = (currentMode === 'playlist-root');
+
             let scriptLines = [
                 '$PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition',
                 '$playlistContent = New-Object System.Collections.Generic.List[string]',
                 '$wshell = New-Object -ComObject WScript.Shell',
                 "$rootScFolder = [System.IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath 'sc'))",
-                '',
-                'function Get-ShortcutTarget {',
-                '    param([string]$path)',
-                '    try {',
-                '        $shortcut = $wshell.CreateShortcut($path)',
-                '        $target = $shortcut.TargetPath',
-                '        if (-not [System.IO.Path]::IsPathRooted($target)) {',
-                '            $target = [System.IO.Path]::GetFullPath((Join-Path -Path (Split-Path -Parent $path) -ChildPath $target))',
-                '        } else {',
-                '            $target = [System.IO.Path]::GetFullPath($target)',
-                '        }',
-                '        return $target',
-                '    } catch {',
-                '        return $null',
-                '    }',
-                '}',
                 ''
             ];
 
+            if (!isPlaylistRootMode) {
+                scriptLines.push(
+                    'function Get-ShortcutTarget {',
+                    '    param([string]$path)',
+                    '    try {',
+                    '        $shortcut = $wshell.CreateShortcut($path)',
+                    '        $target = $shortcut.TargetPath',
+                    '        if (-not [System.IO.Path]::IsPathRooted($target)) {',
+                    '            $target = [System.IO.Path]::GetFullPath((Join-Path -Path (Split-Path -Parent $path) -ChildPath $target))',
+                    '        } else {',
+                    '            $target = [System.IO.Path]::GetFullPath($target)',
+                    '        }',
+                    '        return $target',
+                    '    } catch {',
+                    '        return $null',
+                    '    }',
+                    '}',
+                    ''
+                );
+            }
+
             const selections = Array.from(shortcutSelections.values());
-            const rootScSelections = selections.filter(s => s.type === 'root-sc' || s.type === 'both-sc');
-            const subfolderScSelections = selections.filter(s => s.type === 'subfolder-sc' || s.type === 'both-sc');
+
+            const rootScSelections = isPlaylistRootMode ? [] : selections.filter(s => s.type === 'root-sc' || s.type === 'both-sc');
+            const subfolderScSelections = isPlaylistRootMode ? [] : selections.filter(s => s.type === 'subfolder-sc' || s.type === 'both-sc');
             const playlistScSelections = selections.filter(s => s.type === 'playlist-sc');
 
             if (playlistScSelections.length > 0) {

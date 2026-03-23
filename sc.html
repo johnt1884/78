@@ -15,6 +15,7 @@
             --header-text-color: #01ff01;
             --row-number-color: #fcfc01;
             --date-text-color: #01ffff;
+            --playlist-sc-color: #ff00ff;
         }
         html, body {
             height: 100%;
@@ -139,6 +140,9 @@
         .thumbnail.selected-delete-sc {
             outline: 3px dashed var(--delete-sc-color);
         }
+        .thumbnail.selected-playlist-sc {
+            outline: 3px dashed var(--playlist-sc-color);
+        }
         .thumbnail.selected-shortcut {
             outline: 3px dashed green;
         }
@@ -196,6 +200,10 @@
         }
         #delete-sc-btn.active {
             outline: 3px dashed var(--delete-sc-color);
+            outline-offset: -3px;
+        }
+        #playlist-sc-btn.active {
+            outline: 3px dashed var(--playlist-sc-color);
             outline-offset: -3px;
         }
         .project-header {
@@ -329,6 +337,16 @@
             align-items: center;
             margin-bottom: 10px;
         }
+        .multiplier-input {
+            width: 50px;
+            height: 30px;
+            background-color: var(--toolbar-color);
+            color: white;
+            border: 1px solid #444444;
+            padding: 0 5px;
+            margin-left: 10px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -345,6 +363,7 @@
                         <button id="load-sc-btn">Load all shortcuts</button>
                         <button id="load-root-sc-btn">Load root shortcut directory</button>
                         <button id="create-playlist-load-btn">Create playlist</button>
+                        <button id="create-playlist-root-load-btn">Create playlist root</button>
                     </div>
                 </div>
                 <div id="options-menu-container" style="position: relative; margin-right: 10px;">
@@ -391,6 +410,10 @@
                             <label for="date-text-color-picker">Date Text Color</label>
                             <input type="color" id="date-text-color-picker" value="#01ffff">
                         </div>
+                        <div class="options-row">
+                            <label for="playlist-sc-color-picker">Playlist Selection Outline</label>
+                            <input type="color" id="playlist-sc-color-picker" value="#ff00ff">
+                        </div>
                         <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
                     </div>
                 </div>
@@ -436,6 +459,7 @@
                     <button id="subfolder-sc-btn" class="bar-button selection-type-button" style="display: none;"><span class="color-circle"></span>Subfolder SC</button>
                     <button id="both-sc-btn" class="bar-button selection-type-button" style="display: none;"><span class="color-circle"></span>Both</button>
                     <button id="delete-sc-btn" class="bar-button selection-type-button" style="display: none;"><span class="color-circle"></span>Delete</button>
+                    <button id="playlist-sc-btn" class="bar-button selection-type-button" style="display: none;"><span class="color-circle"></span>Playlist</button>
                 </div>
                 <div>
                     <button id="shortcut-script-btn" class="bar-button">Create Shortcut Script</button>
@@ -472,6 +496,7 @@
         const loadLatestVideosButton = document.getElementById('load-latest-videos-btn');
         const loadRootScButton = document.getElementById('load-root-sc-btn');
         const createPlaylistLoadBtn = document.getElementById('create-playlist-load-btn');
+        const createPlaylistRootLoadBtn = document.getElementById('create-playlist-root-load-btn');
         const shortcutScriptBtn = document.getElementById('shortcut-script-btn');
         const createPlaylistBtn = document.getElementById('create-playlist-btn');
         const deleteShortcutsBtn = document.getElementById('delete-shortcuts-btn');
@@ -483,6 +508,7 @@
         const subfolderScBtn = document.getElementById('subfolder-sc-btn');
         const bothScBtn = document.getElementById('both-sc-btn');
         const deleteScBtn = document.getElementById('delete-sc-btn');
+        const playlistScBtn = document.getElementById('playlist-sc-btn');
         const prevCanvasBtn = document.getElementById('prev-canvas-btn');
         const nextCanvasBtn = document.getElementById('next-canvas-btn');
         const loadMenuBtn = document.getElementById('load-menu-btn');
@@ -556,7 +582,8 @@
                 'delete-sc-color': document.getElementById('delete-sc-color-picker'),
                 'header-text-color': document.getElementById('header-text-color-picker'),
                 'row-number-color': document.getElementById('row-number-color-picker'),
-                'date-text-color': document.getElementById('date-text-color-picker')
+                'date-text-color': document.getElementById('date-text-color-picker'),
+                'playlist-sc-color': document.getElementById('playlist-sc-color-picker')
             };
 
             // Load saved colors
@@ -595,7 +622,8 @@
                         'delete-sc-color': '#ff0101',
                         'header-text-color': '#01ff01',
                         'row-number-color': '#fcfc01',
-                        'date-text-color': '#01ffff'
+                        'date-text-color': '#01ffff',
+                        'playlist-sc-color': '#ff00ff'
                     };
                     Object.keys(defaults).forEach(id => {
                         const color = defaults[id];
@@ -725,9 +753,24 @@
                 }
             });
 
+            createPlaylistRootLoadBtn.addEventListener('click', async () => {
+                try {
+                    const dirHandle = await window.showDirectoryPicker();
+                    currentDirHandle = dirHandle;
+                    currentMode = 'playlist-root';
+                    setSelectionType('playlist-sc');
+                    setVisibilityForMode(currentMode);
+                    await renderVideosInternal(false, sortSelector.value, true);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('Failed to open directory or render playlist root mode:', err);
+                    }
+                }
+            });
+
             createPlaylistBtn.addEventListener('click', () => {
                 if (shortcutSelections.size === 0) {
-                    alert('Please select one or more directories to include in the playlist.');
+                    alert('Please select one or more items to include in the playlist.');
                     return;
                 }
                 generatePlaylistScript();
@@ -735,6 +778,7 @@
             });
 
             deleteScBtn.addEventListener('click', () => setSelectionType('delete-sc'));
+            playlistScBtn.addEventListener('click', () => setSelectionType('playlist-sc'));
 
             deleteShortcutsBtn.addEventListener('click', () => {
                 if (shortcutSelections.size === 0) {
@@ -782,11 +826,13 @@
             const subfolderCircle = getCircle(subfolderScBtn);
             const bothCircle = getCircle(bothScBtn);
             const deleteCircle = getCircle(deleteScBtn);
+            const playlistCircle = getCircle(playlistScBtn);
             
             if (rootCircle) rootCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--root-sc-color');
             if (subfolderCircle) subfolderCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--subfolder-sc-color');
             if (bothCircle) bothCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--both-sc-color');
             if (deleteCircle) deleteCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--delete-sc-color');
+            if (playlistCircle) playlistCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--playlist-sc-color');
         }
 
         function updateSelectionTypeButtons() {
@@ -794,6 +840,7 @@
             if (subfolderScBtn) subfolderScBtn.classList.toggle('active', currentSelectionType === 'subfolder-sc');
             if (bothScBtn) bothScBtn.classList.toggle('active', currentSelectionType === 'both-sc');
             if (deleteScBtn) deleteScBtn.classList.toggle('active', currentSelectionType === 'delete-sc');
+            if (playlistScBtn) playlistScBtn.classList.toggle('active', currentSelectionType === 'playlist-sc');
         }
 
         function renderCanvas(canvasId) {
@@ -853,20 +900,22 @@
             const isScNew = mode === 'sc-new';
             const isLatestVideos = mode === 'latest-videos';
             const isPlaylist = mode === 'playlist';
+            const isPlaylistRoot = mode === 'playlist-root';
 
             deleteShortcutsBtn.style.display = 'none'; // Script handles deletions now
-            shortcutScriptBtn.style.display = isPlaylist ? 'none' : 'inline-block';
-            createPlaylistBtn.style.display = isPlaylist ? 'inline-block' : 'none';
+            shortcutScriptBtn.style.display = (isPlaylist || isPlaylistRoot) ? 'none' : 'inline-block';
+            createPlaylistBtn.style.display = (isPlaylist || isPlaylistRoot) ? 'inline-block' : 'none';
 
             checkboxContainers.forEach(el => el.style.display = 'flex');
-            canvasSelect.style.display = (isDirectory || isSc || isRootSc || isScNew || isLatestVideos || isPlaylist) ? 'inline-block' : 'none';
+            canvasSelect.style.display = (isDirectory || isSc || isRootSc || isScNew || isLatestVideos || isPlaylist || isPlaylistRoot) ? 'inline-block' : 'none';
             groupSelector.style.display = 'none';
 
-            const showSelectionButtons = isLatestVideos || isDirectory || isSc || isRootSc || isScNew || isPlaylist;
-            if (rootScBtn) rootScBtn.style.display = showSelectionButtons ? 'inline-block' : 'none';
-            if (subfolderScBtn) subfolderScBtn.style.display = showSelectionButtons ? 'inline-block' : 'none';
-            if (bothScBtn) bothScBtn.style.display = showSelectionButtons ? 'inline-block' : 'none';
-            if (deleteScBtn) deleteScBtn.style.display = (showSelectionButtons && !isPlaylist) ? 'inline-block' : 'none';
+            const showSelectionButtons = isLatestVideos || isDirectory || isSc || isRootSc || isScNew || isPlaylist || isPlaylistRoot;
+            if (rootScBtn) rootScBtn.style.display = (showSelectionButtons && !isPlaylistRoot) ? 'inline-block' : 'none';
+            if (subfolderScBtn) subfolderScBtn.style.display = (showSelectionButtons && !isPlaylistRoot) ? 'inline-block' : 'none';
+            if (bothScBtn) bothScBtn.style.display = (showSelectionButtons && !isPlaylistRoot) ? 'inline-block' : 'none';
+            if (deleteScBtn) deleteScBtn.style.display = (showSelectionButtons && !isPlaylist && !isPlaylistRoot) ? 'inline-block' : 'none';
+            if (playlistScBtn) playlistScBtn.style.display = isPlaylistRoot ? 'inline-block' : 'none';
             if (showSelectionButtons) {
                 updateSelectionTypeButtons();
             }
@@ -1463,7 +1512,7 @@
                     const hasRootSc = rootScEntry !== false;
 
                     if (isShortcutsOnly) {
-                        if (currentMode === 'root-sc') {
+                        if (currentMode === 'root-sc' || currentMode === 'playlist-root') {
                             if (!hasRootSc) continue;
                         } else if (hasAnyShortcuts) {
                             if (!hasProjectSc && !hasRootSc) continue;
@@ -1519,6 +1568,33 @@
                     dateInfo.textContent = `Created: ${new Date(videoFile.lastModified).toLocaleString()}`;
                     rowDiv.appendChild(dateInfo);
 
+                    let multiplierInput;
+                    if (currentMode === 'playlist-root') {
+                        const navContainer = document.createElement('div');
+                        navContainer.className = 'playlist-nav-container';
+                        rowDiv.appendChild(navContainer);
+
+                        multiplierInput = document.createElement('input');
+                        multiplierInput.type = 'number';
+                        multiplierInput.className = 'multiplier-input';
+                        multiplierInput.value = 1;
+                        multiplierInput.min = 1;
+                        multiplierInput.title = 'Add to playlist multiple times';
+                        navContainer.appendChild(multiplierInput);
+
+                        multiplierInput.addEventListener('change', () => {
+                            const key = project.path + '|' + videoFile.name;
+                            const existingSelection = shortcutSelections.get(key);
+                            if (existingSelection) {
+                                existingSelection.multiplier = parseInt(multiplierInput.value) || 1;
+                            }
+                        });
+
+                        multiplierInput.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                        });
+                    }
+
                     const thumbnailsContainer = document.createElement('div');
                     thumbnailsContainer.className = 'thumbnails-container';
                     rowDiv.appendChild(thumbnailsContainer);
@@ -1538,7 +1614,7 @@
                         else if (hasRootSc) initialShortcutType = 'root-sc';
                     }
 
-                    if (initialShortcutType) {
+                    if (initialShortcutType && currentMode !== 'playlist-root') {
                         const key = project.path + '|' + videoFile.name;
                         const selectionData = { 
                             videoName: videoFile.name, 
@@ -1557,14 +1633,15 @@
                             videoName: videoFile.name,
                             projectPath: project.path,
                             subfolder: videoFile.subfolder,
-                            type: currentSelectionType
+                            type: currentSelectionType,
+                            multiplier: multiplierInput ? (parseInt(multiplierInput.value) || 1) : 1
                         };
                         const key = project.path + '|' + videoFile.name;
                         const existingSelection = shortcutSelections.get(key);
 
                         // Clear previous selection visuals from this row
                         rowDiv.querySelectorAll('.thumbnail').forEach(t => {
-                            t.classList.remove('selected-root-sc', 'selected-subfolder-sc', 'selected-both-sc', 'selected-delete-sc', 'selected-shortcut');
+                            t.classList.remove('selected-root-sc', 'selected-subfolder-sc', 'selected-both-sc', 'selected-delete-sc', 'selected-playlist-sc', 'selected-shortcut');
                         });
 
                         if (existingSelection) {
@@ -1582,7 +1659,7 @@
                         const img = new Image();
                         img.className = 'thumbnail';
                         img.dataset.fileName = file.name;
-                        if (initialShortcutType) {
+                        if (initialShortcutType && currentMode !== 'playlist-root') {
                             img.classList.add('selected-' + initialShortcutType);
                         }
                         thumbnailsContainer.appendChild(img);
@@ -1945,6 +2022,14 @@
                     nextBtn.textContent = '▶';
                     navContainer.appendChild(nextBtn);
 
+                    const multiplierInput = document.createElement('input');
+                    multiplierInput.type = 'number';
+                    multiplierInput.className = 'multiplier-input';
+                    multiplierInput.value = 1;
+                    multiplierInput.min = 1;
+                    multiplierInput.title = 'Add to playlist multiple times';
+                    navContainer.appendChild(multiplierInput);
+
                     if (candidateVideos.length <= 1) {
                         navContainer.style.display = 'none';
                     }
@@ -2023,7 +2108,11 @@
                     };
 
                     rowDiv.addEventListener('click', () => {
-                        const selectionData = { projectPath: project.path, type: currentSelectionType };
+                        const selectionData = {
+                            projectPath: project.path,
+                            type: currentSelectionType,
+                            multiplier: parseInt(multiplierInput.value) || 1
+                        };
                         const key = project.path + '|playlist_entry';
                         const existingSelection = shortcutSelections.get(key);
 
@@ -2040,6 +2129,18 @@
                         }
                     });
 
+                    multiplierInput.addEventListener('change', () => {
+                        const key = project.path + '|playlist_entry';
+                        const existingSelection = shortcutSelections.get(key);
+                        if (existingSelection) {
+                            existingSelection.multiplier = parseInt(multiplierInput.value) || 1;
+                        }
+                    });
+
+                    multiplierInput.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+
                 } catch (e) {
                     console.warn(`Could not process project '${project.name}' for playlist mode:`, e);
                 }
@@ -2051,53 +2152,89 @@
         }
 
         function generatePlaylistScript() {
+            const isPlaylistRootMode = (currentMode === 'playlist-root');
+
             let scriptLines = [
                 '$PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition',
                 '$playlistContent = New-Object System.Collections.Generic.List[string]',
                 '$wshell = New-Object -ComObject WScript.Shell',
                 "$rootScFolder = [System.IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath 'sc'))",
-                '',
-                'function Get-ShortcutTarget {',
-                '    param([string]$path)',
-                '    try {',
-                '        $shortcut = $wshell.CreateShortcut($path)',
-                '        $target = $shortcut.TargetPath',
-                '        if (-not [System.IO.Path]::IsPathRooted($target)) {',
-                '            $target = [System.IO.Path]::GetFullPath((Join-Path -Path (Split-Path -Parent $path) -ChildPath $target))',
-                '        } else {',
-                '            $target = [System.IO.Path]::GetFullPath($target)',
-                '        }',
-                '        return $target',
-                '    } catch {',
-                '        return $null',
-                '    }',
-                '}',
                 ''
             ];
 
+            if (!isPlaylistRootMode) {
+                scriptLines.push(
+                    'function Get-ShortcutTarget {',
+                    '    param([string]$path)',
+                    '    try {',
+                    '        $shortcut = $wshell.CreateShortcut($path)',
+                    '        $target = $shortcut.TargetPath',
+                    '        if (-not [System.IO.Path]::IsPathRooted($target)) {',
+                    '            $target = [System.IO.Path]::GetFullPath((Join-Path -Path (Split-Path -Parent $path) -ChildPath $target))',
+                    '        } else {',
+                    '            $target = [System.IO.Path]::GetFullPath($target)',
+                    '        }',
+                    '        return $target',
+                    '    } catch {',
+                    '        return $null',
+                    '    }',
+                    '}',
+                    ''
+                );
+            }
+
             const selections = Array.from(shortcutSelections.values());
-            const rootScSelections = selections.filter(s => s.type === 'root-sc' || s.type === 'both-sc');
-            const subfolderScSelections = selections.filter(s => s.type === 'subfolder-sc' || s.type === 'both-sc');
+
+            const rootScSelections = isPlaylistRootMode ? [] : selections.filter(s => s.type === 'root-sc' || s.type === 'both-sc');
+            const subfolderScSelections = isPlaylistRootMode ? [] : selections.filter(s => s.type === 'subfolder-sc' || s.type === 'both-sc');
+            const playlistScSelections = selections.filter(s => s.type === 'playlist-sc');
+
+            if (playlistScSelections.length > 0) {
+                scriptLines.push("# --- Processing Specific Video Selections ---");
+                playlistScSelections.forEach(sel => {
+                    const escapedVideoName = escapePSString(sel.videoName);
+                    const escapedProjectPath = escapePSString(sel.projectPath);
+                    const escapedSubfolder = escapePSString(sel.subfolder);
+                    const multiplier = sel.multiplier || 1;
+
+                    let targetPathConstruction = `$PSScriptRoot`;
+                    if (sel.projectPath) {
+                        targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedProjectPath}')`;
+                    }
+                    if (sel.subfolder) {
+                        targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedSubfolder}')`;
+                    }
+                    targetPathConstruction = `Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedVideoName}'`;
+
+                    scriptLines.push(`$targetPath = [System.IO.Path]::GetFullPath((${targetPathConstruction}))`);
+                    scriptLines.push(`for ($i = 0; $i -lt ${multiplier}; $i++) { $playlistContent.Add($targetPath) }`);
+                    scriptLines.push(`Write-Host "Added to playlist (video): ${escapedVideoName} (${multiplier}x)"`);
+                });
+                scriptLines.push('');
+            }
 
             if (rootScSelections.length > 0) {
                 scriptLines.push("# --- Processing Root SC Selections ---");
+                scriptLines.push(`$rootSelections = @{}`);
+                rootScSelections.forEach(sel => {
+                    const escapedProjectPath = escapePSString(sel.projectPath);
+                    const multiplier = sel.multiplier || 1;
+                    scriptLines.push(`$rootSelections['' + [System.IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '${escapedProjectPath}'))] = ${multiplier}`);
+                });
+
                 scriptLines.push(`if (Test-Path -LiteralPath $rootScFolder) {`);
                 scriptLines.push(`    $shortcuts = Get-ChildItem -LiteralPath $rootScFolder -File | Where-Object { $_.Extension -match '^\\.(lnk|ink)$' }`);
                 scriptLines.push(`    foreach ($shortcutFile in $shortcuts) {`);
                 scriptLines.push(`        $targetPath = Get-ShortcutTarget $shortcutFile.FullName`);
-                scriptLines.push('        if (-not $targetPath) { Write-Host "Skipping unresolvable shortcut: $($shortcutFile.Name)" -ForegroundColor Yellow; continue }');
-                
-                rootScSelections.forEach(sel => {
-                    const escapedProjectPath = escapePSString(sel.projectPath);
-                    scriptLines.push(`        $projectCheckPath = [System.IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '${escapedProjectPath}'))`);
-                    scriptLines.push(`        if ($targetPath.StartsWith($projectCheckPath + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $targetPath -eq $projectCheckPath) {`);
-                    scriptLines.push(`            if ($playlistContent -notcontains $targetPath) {`);
-                    scriptLines.push(`                $playlistContent.Add($targetPath)`);
-                    scriptLines.push(`                Write-Host "Added to playlist (root): $($shortcutFile.Name)"`);
-                    scriptLines.push(`            } else { Write-Host "Skipping duplicate target from root: $($shortcutFile.Name)" -ForegroundColor DarkGray }`);
-                    scriptLines.push(`        }`);
-                });
-
+                scriptLines.push('        if (-not $targetPath) { continue }');
+                scriptLines.push(`        foreach ($projPath in $rootSelections.Keys) {`);
+                scriptLines.push(`            if ($targetPath.StartsWith($projPath + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $targetPath -eq $projPath) {`);
+                scriptLines.push(`                $multiplier = $rootSelections[$projPath]`);
+                scriptLines.push(`                for ($i = 0; $i -lt $multiplier; $i++) { $playlistContent.Add($targetPath) }`);
+                scriptLines.push(`                Write-Host "Added to playlist (root): $($shortcutFile.Name) ($multiplier x)"`);
+                scriptLines.push(`                break`);
+                scriptLines.push(`            }`);
+                scriptLines.push(`        }`);
                 scriptLines.push(`    }`);
                 scriptLines.push(`}`);
                 scriptLines.push('');
@@ -2105,25 +2242,29 @@
 
             if (subfolderScSelections.length > 0) {
                 scriptLines.push("# --- Processing Subfolder SC Selections ---");
+                scriptLines.push(`$subfolderSelections = @{}`);
                 subfolderScSelections.forEach(sel => {
                     const escapedProjectPath = escapePSString(sel.projectPath);
+                    const multiplier = sel.multiplier || 1;
                     let projectPathVar = `$PSScriptRoot`;
                     if (sel.projectPath) {
                         projectPathVar = `Join-Path -Path $PSScriptRoot -ChildPath '${escapedProjectPath}'`;
                     }
-                    scriptLines.push(`    $projectPath = [System.IO.Path]::GetFullPath((${projectPathVar}))`);
-                    scriptLines.push(`    if (Test-Path -LiteralPath $projectPath) {`);
-                    scriptLines.push(`        $projectShortcuts = Get-ChildItem -LiteralPath $projectPath -Recurse -File | Where-Object { $_.Extension -match '^\\.(lnk|ink)$' -and -not $_.FullName.StartsWith($rootScFolder + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) }`);
-                    scriptLines.push(`        foreach ($shortcutFile in $projectShortcuts) {`);
-                    scriptLines.push(`            $targetPath = Get-ShortcutTarget $shortcutFile.FullName`);
-                    scriptLines.push('            if (-not $targetPath) { Write-Host "Skipping unresolvable shortcut: $($shortcutFile.Name)" -ForegroundColor Yellow; continue }');
-                    scriptLines.push(`            if ($playlistContent -notcontains $targetPath) {`);
-                    scriptLines.push(`                $playlistContent.Add($targetPath)`);
-                    scriptLines.push(`                Write-Host "Added to playlist (subfolder): $($shortcutFile.Name)"`);
-                    scriptLines.push(`            } else { Write-Host "Skipping duplicate target from subfolder: $($shortcutFile.Name)" -ForegroundColor DarkGray }`);
-                    scriptLines.push(`        }`);
-                    scriptLines.push(`    }`);
+                    scriptLines.push(`$subfolderSelections['' + [System.IO.Path]::GetFullPath((${projectPathVar}))] = ${multiplier}`);
                 });
+
+                scriptLines.push(`foreach ($projPath in $subfolderSelections.Keys) {`);
+                scriptLines.push(`    if (Test-Path -LiteralPath $projPath) {`);
+                scriptLines.push(`        $multiplier = $subfolderSelections[$projPath]`);
+                scriptLines.push(`        $projectShortcuts = Get-ChildItem -LiteralPath $projPath -Recurse -File | Where-Object { $_.Extension -match '^\\.(lnk|ink)$' -and -not $_.FullName.StartsWith($rootScFolder + [IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) }`);
+                scriptLines.push(`        foreach ($shortcutFile in $projectShortcuts) {`);
+                scriptLines.push(`            $targetPath = Get-ShortcutTarget $shortcutFile.FullName`);
+                scriptLines.push('            if (-not $targetPath) { continue }');
+                scriptLines.push(`            for ($i = 0; $i -lt $multiplier; $i++) { $playlistContent.Add($targetPath) }`);
+                scriptLines.push(`            Write-Host "Added to playlist (subfolder): $($shortcutFile.Name) ($multiplier x)"`);
+                scriptLines.push(`        }`);
+                scriptLines.push(`    }`);
+                scriptLines.push(`}`);
                 scriptLines.push('');
             }
 
